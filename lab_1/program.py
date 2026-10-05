@@ -15,10 +15,12 @@ def reading():
         rhs = frac(input(f"Введите правую часть {i + 1}-го ограничения: "))
         constraints.append((coefs, sign, rhs))
 
-    return sorted(vars), obj_coef, tend, pos_vars, constraints
+    return vars, obj_coef, tend, pos_vars, constraints
 
 def canonical_form(vars, obj_coef, tend, pos_vars, constraints):
+    tend_change = False
     if tend == "max":
+        tend_change = True
         obj_coef = [-c for c in obj_coef]
 
     new_vars = []
@@ -30,10 +32,11 @@ def canonical_form(vars, obj_coef, tend, pos_vars, constraints):
             new_vars.append(var)
             new_obj.append(coef)
         else:
-            plus = next_var_name(vars[-1])
-            minus = next_var_name(plus)
+            plus = next_var_name(vars[-1], vars + new_vars)
+            new_vars.append(plus)
+            minus = next_var_name(plus, vars + new_vars)
+            new_vars.append(minus)
             replaced_variables[var] = (plus, minus)
-            new_vars.extend([plus, minus])
             new_obj.extend([coef, -coef])
 
     for row, sign, rhs in constraints:
@@ -52,7 +55,7 @@ def canonical_form(vars, obj_coef, tend, pos_vars, constraints):
                 new_row.append((var, coef))
 
         if sign != "=":
-            syn_var = next_var_name(new_vars[-1])
+            syn_var = next_var_name(new_vars[-1], vars + new_vars)
             new_vars.append(syn_var)
             new_obj.append(frac(0))
             for k in range(len(new_constraints)):
@@ -65,15 +68,17 @@ def canonical_form(vars, obj_coef, tend, pos_vars, constraints):
                     new_constraints[k][0].append((syn_var, frac(0)))
 
         if rhs < 0:
-            new_row = [-x for x in new_row]
+            new_row = [(v, -c) for v, c in new_row]
             rhs = -rhs
 
         new_constraints[i] = (new_row, "=", rhs)
 
-    for i in range(len(new_constraints)):
-        new_constraints[i] = ([coef for var, coef in sorted(new_constraints[i][0])], new_constraints[i][1], new_constraints[i][2])
+    sort_func = lambda x: new_vars.index(x[0])
 
-    return new_vars, new_obj, new_constraints, replaced_variables
+    for i in range(len(new_constraints)):
+        new_constraints[i] = ([coef for var, coef in sorted(new_constraints[i][0], key=sort_func)], new_constraints[i][1], new_constraints[i][2])
+
+    return new_vars, new_obj, tend_change, new_constraints, replaced_variables
 
 def auxiliary_task(vars, constraints):
     vars = list(vars)
@@ -85,9 +90,9 @@ def auxiliary_task(vars, constraints):
     rhs = [rhs for row, sign, rhs in constraints]
 
     artificial_vars = []
-    artificial_vars.append(next_var_name(vars[-1]))
+    artificial_vars.append(next_var_name(vars[-1], vars))
     for i in range(len(rows) - 1):
-        artificial_vars.append(next_var_name(artificial_vars[-1]))
+        artificial_vars.append(next_var_name(artificial_vars[-1], vars + artificial_vars))
 
     basis_vars = artificial_vars[:]
     column_vars = vars[:]
@@ -112,10 +117,11 @@ def auxiliary_task(vars, constraints):
         return False, [], [], []
 
     art_cols = [j for j, var in enumerate(column_vars) if var in artificial_vars]
-    for i in range(len(basis_vars)):
+    for i in range(len(basis_vars) - 1, -1, -1):
         if basis_vars[i] in artificial_vars:
             table.pop(i)
             basis_vars.pop(i)
+            continue
         table[i] = [table[i][k] for k in range(len(table[i])) if k not in art_cols]
     column_vars = [var for var in column_vars if var not in artificial_vars]
 
@@ -165,6 +171,7 @@ def simplex_method(basis_vars, column_vars, table):
                 ratios.append((b / a, i))
 
         if not ratios:
+            print("Нет опорной строки для выбора опорного элемента. Решение не ограничено.")
             return None, None, None
 
         pivot_row = min(ratios, key=lambda x: x[0])[1]
@@ -195,20 +202,18 @@ def simplex_method(basis_vars, column_vars, table):
 
         basis_vars[pivot_row], column_vars[pivot_col] = column_vars[pivot_col], basis_vars[pivot_row]
 
-def next_var_name(var_name):
-    if var_name.isalpha():
-        return var_name + "1"
-    
+def next_var_name(var_name, used_vars):
     for i in range(0, len(var_name)):
         if var_name[i].isdigit():
             prefix = var_name[:i]
             suffix = var_name[i:]
-            new_suffix = str(int(suffix) + 1)
-            return prefix + new_suffix
+            while prefix + suffix in used_vars:
+                suffix = str(int(suffix) + 1)
+            return prefix + suffix
 
 def main():
     base_vars, obj_coef, tend, pos_vars, constraints = reading()
-    vars, obj_coef, constraints, replaced_variables = canonical_form(base_vars, obj_coef, tend, pos_vars, constraints)
+    vars, obj_coef, tend_change, constraints, replaced_variables = canonical_form(base_vars, obj_coef, tend, pos_vars, constraints)
     # replaced_variables - dict() формата {x: (x+, x-)}
     is_possible, basis_vars, column_vars, table = auxiliary_task(vars, constraints)
 
@@ -219,6 +224,9 @@ def main():
     new_table = change_with_basis(vars, obj_coef, basis_vars, column_vars, table)
     free_vars = [var for var in vars if var not in basis_vars]
     basis_vars, free_vars, res_table = simplex_method(basis_vars, free_vars, new_table)
+    
+    if basis_vars is None:
+        return
 
     result = {}
     for var in base_vars:
@@ -240,7 +248,7 @@ def main():
     print("Решение задачи:")
     for var in base_vars:
         print(f"{var} = {result[var]}")
-    print(f"Оптимальное значение целевой функции: {res_table[-1][-1]}")
+    print(f"Оптимальное значение целевой функции: {-res_table[-1][-1] * (-1 if tend_change else 1)}")
 
 if __name__ == "__main__":
     main()
