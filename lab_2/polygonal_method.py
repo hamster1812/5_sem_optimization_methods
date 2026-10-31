@@ -4,6 +4,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+ALLOALLOWED_MATH = {
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "exp": math.exp,
+    "log": math.log,
+    "sqrt": math.sqrt,
+    "abs": abs,
+    "pi": math.pi,
+    "e": math.e
+}
+
+
 def reading():
     expression = input("Введите функцию: f(x) = ")
     a, b = map(float, input("Введите координаты ограничения a и b через пробел: ").split())
@@ -36,7 +49,7 @@ def take_function(expression, ext="min"):
             count_calls = 0
             return
         count_calls += 1
-        return eval(f"-({expression})" if ext == "max" else expression, {**math.__dict__, "x": x})
+        return eval(f"-({expression})" if ext == "max" else expression, {**ALLOALLOWED_MATH, "x": x})
     return f
 
 
@@ -47,6 +60,8 @@ def check_values(f, a, b, density):
         y = np.array([f(xi) for xi in x])
     except (ValueError, ZeroDivisionError):
         raise Exception("Функция определена не на всем рассматриваемом отрезке.")
+    except NameError as e:
+        raise Exception(f"В функции используются неопределенную математическую конструкцию: {e.name}")
     if any([not math.isfinite(i) for i in y]):
         raise Exception("Функция содержит точки, не являющиеся конечными.")
 
@@ -179,7 +194,7 @@ def calculation(expression, a, b, ext, eps, density):
     f = take_function(expression, ext)
     check_values(f, a, b, density)
     L = find_L(f, a, b, density)
-    # f(0, zero_count=True)
+    f(0, zero_count=True)
 
     if L == 0:
         print("Константа L = 0, возможно взята маленькая плотность или функция постоянна.")
@@ -215,10 +230,20 @@ def example_1():
     calculation(expression, a, b, ext, eps, density)
 
 
-def example_Rastrigina():
+def example_Rastrigina_max():
     expression = "10 + x**2 - 10 * cos(2 * pi * x)"
     a, b = -1.5, 2
     ext = "max"
+    eps = 0.01
+    density = 100
+
+    calculation(expression, a, b, ext, eps, density)
+
+
+def example_Rastrigina_min():
+    expression = "10 + x**2 - 10 * cos(2 * pi * x)"
+    a, b = -1.5, 2
+    ext = "min"
     eps = 0.01
     density = 100
 
@@ -229,8 +254,9 @@ def print_menu():
     print()
     print("1. Ручной ввод")
     print("2. Выполнение примера 1")
-    print("3. Выполнение примера с функцией Растригина")
-    print("4. Завершить")
+    print("3. Выполнение примера с функцией Растригина (max)")
+    print("4. Выполнение примера с функцией Растригина (min)")
+    print("5. Завершить")
 
 
 def main():
@@ -246,9 +272,12 @@ def main():
             example_1()
 
         elif choice == "3":
-            example_Rastrigina()
+            example_Rastrigina_max()
 
         elif choice == "4":
+            example_Rastrigina_min()
+
+        elif choice == "5":
             break
 
         else:
@@ -258,5 +287,5 @@ def main():
 if __name__ == "__main__":
     main()
     # example_1()
-    # example_Rastrigina()
-    
+    # example_Rastrigina_max()
+    # example_Rastrigina_min()
